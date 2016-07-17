@@ -10,6 +10,7 @@ install:
 	install gslx680.service /etc/systemd/system/gslx680.service
 	#rm -f /etc/init.d/gslx680
 	#update-rc.d igslx680 defaults
-
+	@mkdir -p /etc/gslx680
+	install firmware.cfg /etc/gslx680/firmware.cfg
 clean:
 	rm -rf gslx680 *.o
