@@ -1,7 +1,9 @@
 ## HISTORY OF VERSIONS ##
 
+* Version ADE1TEC (2016-07-17)
+   * Set gpio beaglebone model
 * Version 7.0 (2014-09-24)
-   * Updated to allow systemd
+    * Updated to allow systemd
 * Version 6.0 (2013-12-06)
    * Moves the cursor to the touch point to ensure that the scrolling events are sent to the right zone
 * Version 5.0 (2013-12-05)
@@ -16,4 +18,3 @@
    * Added support for showing the on-screen keyboard in TabletWM by touching with three fingers
 * Version 1.0 (2013-08-27)
    * First public version
-
