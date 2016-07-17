@@ -736,7 +736,7 @@ int main(int argc, char **argv) {
 	}
 
 	printf("Connecting to device %s, firmware %s\n",adapter,firmware);
-
+	init_wake_gpio(&cliente);
 	cliente.adapter=open(adapter,O_RDWR);
 	if (cliente.adapter<0) {
 		printf("Can't open device %s\n",adapter);
