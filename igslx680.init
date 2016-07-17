@@ -16,7 +16,7 @@ function do_stop {
 }
 
 function do_start {
-    /bin/gslx680 -new_scroll /dev/i2c-1 /etc/gslx680/firmware.cfg &
+    /bin/gslx680 -new_scroll /dev/i2c-2 /etc/gslx680/firmware.cfg &
 }
 case "$1" in
   start)
