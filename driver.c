@@ -1,4 +1,6 @@
 #include "driver.h"
+#include "gpio.h"
+
 
 #include <errno.h>
 #include <unistd.h>
@@ -13,15 +15,12 @@
 #include <linux/uinput.h>
 #include <math.h>
 
-#ifdef USE_FB
-#include "linux/fb.h"
-#endif
 
 struct i2c_client {
 	int adapter;
 	int ufile;
 	int mfile;
-	char *gpio;
+	int gpio;
 	char invert_x;
 	char invert_y;
 	int resx;
@@ -29,19 +28,22 @@ struct i2c_client {
 	char new_scroll;
 };
 
-void send_value(int value, struct i2c_client *cliente) {
-
-	int fd;
-	char buffer[20];
-
-	sprintf(buffer,"%d",value);
-	fd=open(cliente->gpio,O_WRONLY);
-	if (fd<=0) {
-		printf("Can't open device %s\n",cliente->gpio);
+void init_wake_gpio(struct i2c_client *cliente) {
+	int err;
+	err=gpio_export(cliente->gpio);
+	if (err<=0) {
+		printf("Can't use gpio %d\n",cliente->gpio);
 		return;
 	}
-	write(fd,buffer,strlen(buffer));
-	close(fd);
+	err=gpio_set_dir(cliente->gpio,1);
+	if (err<=0) {
+		printf("Can't set direction of gpio %d\n",cliente->gpio);
+		return;
+	}
+}
+
+void send_value(int value, struct i2c_client *cliente) {
+	gpio_set_value(cliente->gpio,value);
 }
 
 static int gslX680_shutdown_low(struct i2c_client *cliente) {
@@ -73,15 +75,15 @@ static int gsl_ts_write(struct i2c_client *client, u8 addr, u8 *pdata, int datal
 		printf("%s too big datalen = %d!\n", __func__, datalen);
 		return -1;
 	}
-	
+
 	tmp_buf[0] = addr;
 	bytelen=1;
-	
+
 	if (datalen != 0 && pdata != NULL) {
 		memcpy(tmp_buf+1, pdata, datalen);
 		bytelen += datalen;
 	}
-	
+
 	ret = write(client->adapter, tmp_buf, bytelen);
 
 	return ret;
@@ -100,14 +102,14 @@ static int gsl_ts_read(struct i2c_client *client, u8 addr, u8 *pdata, unsigned i
 		printf("%s set data address fail!\n", __func__);
 		return ret;
 	}
-	
+
 	return read(client->adapter, pdata, datalen);
 }
 
 static void reset_chip(struct i2c_client *client) {
 
 	u8 buf[1];
-	
+
 	buf[0]=0x88;
 	gsl_ts_write(client, GSL_STATUS_REG, buf, 1);
 	usleep(10000);
@@ -140,9 +142,9 @@ static void gsl_load_fw(struct i2c_client *client,char *fw_file) {
 	printf("=============gsl_load_fw start==============\n");
 
 	FILE *fichero;
-	
+
 	fichero=fopen(fw_file,"r");
-	
+
 	if (fichero==NULL) {
 		printf("Can't open firmware file %s\n",fw_file);
 		return;
@@ -193,7 +195,7 @@ static void gsl_load_fw(struct i2c_client *client,char *fw_file) {
 static void startup_chip(struct i2c_client *client) {
 	u8 tmp = 0x00;
 	gsl_ts_write(client, GSL_STATUS_REG, &tmp, 1);
-	usleep(10000);	
+	usleep(10000);
 }
 
 static void init_chip(struct i2c_client *client,char *fw_file) {
@@ -211,7 +213,7 @@ static void init_chip(struct i2c_client *client,char *fw_file) {
 	gslX680_shutdown_high(client);
 	usleep(20000);
 	reset_chip(client);
-	startup_chip(client);	
+	startup_chip(client);
 }
 
 void do_sync(struct i2c_client *cliente,int file) {
@@ -235,7 +237,7 @@ void move_to(struct i2c_client *cliente,int x, int y) {
 	ev.code = ABS_X;
 	ev.value = x;
 	write(cliente->ufile, &ev, sizeof(struct input_event));
-		
+
 	memset(&ev, 0, sizeof(struct input_event));
 	ev.type = EV_ABS;
 	ev.code = ABS_Y;
@@ -647,12 +649,12 @@ int main(int argc, char **argv) {
 	struct i2c_client cliente;
 	int retval;
 	struct uinput_user_dev uidev;
-	
+
 	if (argc<3) {
 		printf("Version 7\n");
-		printf("Format: driver [-res XxY] [-gpio PATH] [-invert_x] [-invert_y] DEVICE FW_FILE\n\n");
+		printf("Format: driver [-res XxY] [-gpio NUMBER] [-invert_x] [-invert_y] DEVICE FW_FILE\n\n");
 		printf("-res XxY: specifies that the screen resolution is X width and Y height (default: 800x480)\n");
-		printf("-gpio PATH: sets the path to the GPIO device that enables and disables the touch chip\n");
+		printf("-gpio NUMBER: sets the number to the GPIO device that enables and disables the touch chip\n");
 		printf("-invert_x: inverts the X coordinates\n");
 		printf("-invert_y: inverts the Y coordinates\n");
 		printf("-new_scroll: do scroll with a single finger\n");
@@ -666,22 +668,9 @@ int main(int argc, char **argv) {
 	char *option;
 	cliente.invert_x=0;
 	cliente.invert_y=0;
-	cliente.gpio="/sys/devices/virtual/misc/sun4i-gpio/pin/pb3";
+	cliente.gpio=113;
 	cliente.resx=SCREEN_MAX_X;
 	cliente.resy=SCREEN_MAX_Y;
-
-#ifdef USE_FB
-	int fb_dev;
-	fb_dev=open("/dev/fb0",O_RDWR);
-	if (fb_dev>0) {
-		struct fb_var_screeninfo vinfo;
-		if (0==ioctl (fb_dev, FBIOGET_VSCREENINFO, &vinfo)) {
-			cliente.resx=vinfo.xres;
-			cliente.resy=vinfo.yres;
-	    }
-	    close(fb_dev);
-	}
-#endif
 
 	int loop=1;
 	while(loop<argc) {
@@ -713,7 +702,11 @@ int main(int argc, char **argv) {
 				continue;
 			}
 			if (!strcmp(option,"-gpio")) {
-				cliente.gpio=strdup(argv[loop]);
+				if (1!=sscanf(argv[loop],"%d",&cliente.gpio)) {
+					printf("Error: resolution %s has an incorrect format\n",argv[loop]);
+					return -1;
+				}
+
 				loop++;
 				continue;
 			}
@@ -743,7 +736,7 @@ int main(int argc, char **argv) {
 	}
 
 	printf("Connecting to device %s, firmware %s\n",adapter,firmware);
-	
+
 	cliente.adapter=open(adapter,O_RDWR);
 	if (cliente.adapter<0) {
 		printf("Can't open device %s\n",adapter);
@@ -774,8 +767,8 @@ int main(int argc, char **argv) {
 	retval = ioctl(cliente.ufile, UI_SET_EVBIT, EV_ABS);
 	retval = ioctl(cliente.ufile, UI_SET_ABSBIT, ABS_X);
 	retval = ioctl(cliente.ufile, UI_SET_ABSBIT, ABS_Y);
-	
-	
+
+
 	memset(&uidev, 0, sizeof(uidev));
 
 	snprintf(uidev.name, UINPUT_MAX_NAME_SIZE, "gsl1680-uinput");
@@ -788,7 +781,7 @@ int main(int argc, char **argv) {
 	uidev.absmin[ABS_Y] = 0;
 	uidev.absmax[ABS_Y] = cliente.resy-1;
 	retval = write(cliente.ufile, &uidev, sizeof(uidev));
-	
+
 	retval = ioctl(cliente.ufile, UI_DEV_CREATE);
 	retval = ioctl(cliente.ufile, UI_SET_PROPBIT,INPUT_PROP_DIRECT);
 	retval = ioctl(cliente.ufile, UI_SET_PROPBIT,INPUT_PROP_POINTER);
@@ -820,7 +813,7 @@ int main(int argc, char **argv) {
 	retval = ioctl(cliente.mfile, UI_SET_RELBIT, REL_Y);
 	retval = ioctl(cliente.mfile, UI_SET_RELBIT, REL_WHEEL);
 	retval = ioctl(cliente.mfile, UI_SET_RELBIT, REL_HWHEEL);
-	
+
 	memset(&uidev, 0, sizeof(uidev));
 	snprintf(uidev.name, UINPUT_MAX_NAME_SIZE, "gsl1680-2-uinput");
 	uidev.id.bustype = BUS_I2C;
@@ -828,9 +821,9 @@ int main(int argc, char **argv) {
 	uidev.id.product = 0x2;
 	uidev.id.version = 1;
 	retval = write(cliente.mfile, &uidev, sizeof(uidev));
-	
+
 	retval = ioctl(cliente.mfile, UI_SET_PROPBIT,INPUT_PROP_POINTER);
-	
+
 	retval = ioctl(cliente.mfile, UI_DEV_CREATE);
 
 	init_chip(&cliente,firmware);
@@ -840,4 +833,3 @@ int main(int argc, char **argv) {
 		usleep(20000); // do 50 reads per second
 	}
 }
-
