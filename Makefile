@@ -1,7 +1,7 @@
 gslx680: driver.o
 	gcc -o gslx680 driver.o -lm
 
-driver.o: driver.c driver.h
+driver.o: driver.c driver.h gpio.h
 	gcc -c -o driver.o driver.c
 
 install:
@@ -13,4 +13,3 @@ install:
 
 clean:
 	rm -rf gslx680 *.o
-
