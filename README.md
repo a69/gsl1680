@@ -43,22 +43,11 @@ FIRMWARE_FILE is the file with the firmware, in the format explained before. Thi
 
 **-res** allows to specify the screen resolution. If not set, the driver will use 800x600 pixels.
 
-**-gpio** allows to specify the path to the GPIO device that enables or disables the chip. By default, it presumes it is */sys/devices/virtual/misc/sun4i-gpio/pin/pb3*. In order to make this work, it a must to have the GPIO support in the kernel and to enable that pin as an **OUTPUT** gpio.
+**-gpio** allows to specify GPIO nothat enables or disables the chip. By default, it presumes it is *113*. In order to make this work, it a must to have the GPIO support in the kernel and to enable that pin as an **OUTPUT** gpio.
 
 **-invert_x** and **-invert_y** allows to invert the horizontal or vertical coordinates, in case that, when you touch the left part of the screen, the cursor moves to the right, and so on.
 
 **-new_scroll** allows to use a single finger to do scrolling.
-
-In the case of the sun4i SoCs, for example, to know which pin correspond to the enable/disable option of the chip, you need to check the .FEX configuration file and find the *ctp_wakeup* pin in the *ctp* option part (where the touch screen is defined) and create a GPIO entry at the end of the file with:
-
-    [gpio_para]
-    gpio_used = 1
-    gpio_num = 1
-    gpio_pin_1 = port:PB03<1><default><default><1>
-
-Also you must load the CONFIG_SUN4I_GPIO_UGLY module.
-
-For other SoCs you have to discovery that for yourself (sorry).
 
 ## More info about this chip ##
 
